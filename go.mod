@@ -1,4 +1,4 @@
-module githun.com/Techbjd/pong
+module github.com/Techbjd/pong
 
 go 1.25.8
 
