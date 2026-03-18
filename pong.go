@@ -1,17 +1,55 @@
 package main
 
-// Experiment! draw some crazy stuff!
-// Gist it next week and I'll show it off on stream
-
 import (
 	"fmt"
+	"math"
 	"math/rand"
+	"time"
 	"unsafe"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 const winWidth, winHeight int = 800, 600
+
+type gameState int
+
+const (
+	start gameState = iota
+	play
+)
+
+var state = start
+
+var nums = [][]byte{
+	{1, 1, 1,
+		1, 0, 1,
+		1, 0, 1,
+		1, 0, 1,
+		1, 1, 1,
+	},
+	{
+		1, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		1, 1, 1,
+	},
+	{
+		1, 1, 1,
+		0, 0, 1,
+		1, 1, 1,
+		1, 0, 0,
+		1, 1, 1,
+	},
+	{
+		1, 1, 1,
+		0, 0, 1,
+		0, 1, 1,
+		0, 0, 1,
+		1, 1, 1,
+	},
+}
 
 type color struct {
 	r, g, b byte
@@ -33,120 +71,123 @@ type paddle struct {
 	pos
 	w     float32
 	h     float32
+	score int
+	speed float32
 	color color
 }
 
-func (ball *ball) draw(pixels []byte) {
-	//yagni-ya aint gona need it
-	for y := -ball.radius; y < ball.radius; y++ {
-		for x := -ball.radius; x < ball.radius; x++ {
-			if x*x+y*y < ball.radius*ball.radius {
-				setPixel(int(ball.x)+x, int(ball.y)+y, color{255, 255, 255}, pixels)
+func drawNumber(pos pos, color color, size int, num int, pixels []byte) {
+	startX := int(pos.x) - (size*3)/2
+	startY := int(pos.y) - (size*5)/2
+
+	for i, v := range nums[num] {
+		if v == 1 {
+			for y := startY; y < startY+size; y++ {
+				for x := startX; x < startX+size; x++ {
+					setPixel(x, y, color, pixels)
+				}
+			}
+		}
+		startX += size
+		if (i+1)%3 == 0 {
+			startY += size
+			startX -= size * 3
+		}
+	}
+}
+
+func (b *ball) draw(pixels []byte) {
+	for y := -b.radius; y < b.radius; y++ {
+		for x := -b.radius; x < b.radius; x++ {
+			if x*x+y*y < b.radius*b.radius {
+				setPixel(int(b.x)+x, int(b.y)+y, b.color, pixels)
 			}
 		}
 	}
 }
 
-func (paddle *paddle) draw(pixels []byte) {
-	//position of the kpong bat start from the center
-	startx := int(paddle.x) - int(paddle.w/2)
-
-	starty := int(paddle.y) - int(paddle.h/2)
-
-	for y := 0; y < int(paddle.h); y++ {
-		for x := 0; x < int(paddle.w); x++ {
-			setPixel(startx+x, starty+y, paddle.color, pixels)
-		}
-	}
-
+func lerp(a float32, b float32, pct float32) float32 {
+	return a + pct*(b-a)
 }
 
-func (ball *ball) update(leftpaddle *paddle, rightpaddle *paddle) {
+func (p *paddle) draw(pixels []byte) {
+	startx := int(p.x) - int(p.w/2)
+	starty := int(p.y) - int(p.h/2)
 
-	ball.x += ball.xv
-	ball.y += ball.yv
-
-	// Top wall
-	if ball.y-float32(ball.radius) <= 0 {
-
-		ball.y = float32(ball.radius)
-
-		ball.yv = float32(rand.Intn(10) - 5)
-
-		ball.xv = float32(rand.Intn(6) + 2)
-		if rand.Intn(2) == 0 {
-			ball.xv = -ball.xv
+	for y := 0; y < int(p.h); y++ {
+		for x := 0; x < int(p.w); x++ {
+			setPixel(startx+x, starty+y, p.color, pixels)
 		}
 	}
 
-	// Bottom wall
-	if ball.y+float32(ball.radius) >= float32(winHeight) {
-		ball.yv = -ball.yv
-		ball.xv = -ball.xv
-
-		if rand.Intn(2) == 0 {
-			ball.xv = -ball.xv
-		}
-		ball.y = float32(winHeight - ball.radius)
-	}
-	/*
-		// Left wall
-		if ball.x-float32(ball.radius) <= 0 {
-			ball.xv = -ball.xv
-			ball.x = float32(ball.radius)
-		}
-
-		// Right wall
-		if ball.x+float32(ball.radius) >= float32(winWidth) {
-			ball.xv = -ball.xv
-			ball.x = float32(winWidth - ball.radius)
-		}
-	*/
-	// Score condition
-	if ball.x < 0 || ball.x > float32(winWidth) {
-		ball.x = 300
-		ball.y = 300
-	}
-
-	if ball.x-float32(ball.radius) <= leftpaddle.x+float32(leftpaddle.w)/2 &&
-		ball.y >= leftpaddle.y-float32(leftpaddle.h)/2 &&
-		ball.y <= leftpaddle.y+float32(leftpaddle.h)/2 {
-
-		ball.xv = float32(rand.Intn(6) + 4) // positive → right
-	}
-	if ball.x+float32(ball.radius) >= rightpaddle.x-float32(rightpaddle.w)/2 &&
-		ball.y >= rightpaddle.y-float32(rightpaddle.h)/2 &&
-		ball.y <= rightpaddle.y+float32(rightpaddle.h)/2 {
-
-		ball.xv = -float32(rand.Intn(6) + 4) // negative → left
-	}
-
+	numX := lerp(p.pos.x, getCenter().x, 0.2)
+	drawNumber(pos{numX, 35}, p.color, 10, p.score, pixels)
 }
 
-const paddleSpeed float32 = 10
+func (b *ball) update(left *paddle, right *paddle) {
+	b.x += b.xv
+	b.y += b.yv
 
-func (paddle *paddle) update(keyState []uint8) {
+	// Top/bottom bounce
+	if b.y-float32(b.radius) <= 0 || b.y+float32(b.radius) >= float32(winHeight) {
+		b.yv = -b.yv
+	}
+
+	// Score
+	if b.x < 0 {
+		right.score++
+		b.pos = getCenter()
+	} else if b.x > float32(winWidth) {
+		left.score++
+		b.pos = getCenter()
+	}
+
+	// Paddle collision (left)
+	if b.x-float32(b.radius) <= left.x+left.w/2 &&
+		b.y >= left.y-left.h/2 &&
+		b.y <= left.y+left.h/2 {
+
+		b.xv = float32(rand.Intn(6) + 5)
+		b.yv = float32(rand.Intn(6) - 3)
+	}
+
+	// Paddle collision (right)
+	if b.x+float32(b.radius) >= right.x-right.w/2 &&
+		b.y >= right.y-right.h/2 &&
+		b.y <= right.y+right.h/2 {
+
+		b.xv = -float32(rand.Intn(6) + 5)
+		b.yv = float32(rand.Intn(6) - 3)
+	}
+}
+
+const paddleSpeed float32 = 400
+
+func (p *paddle) update(keyState []uint8, controllerAxis int16, elapsedTime float32) {
 	if keyState[sdl.SCANCODE_UP] != 0 {
-
-		paddle.pos.y -= paddleSpeed
+		p.y -= paddleSpeed * elapsedTime
 	}
 	if keyState[sdl.SCANCODE_DOWN] != 0 {
-		paddle.pos.y += paddleSpeed
-	}
-	// top boundary
-	if paddle.pos.y < float32(paddle.h/2) {
-		paddle.pos.y = float32(paddle.h / 2)
+		p.y += paddleSpeed * elapsedTime
 	}
 
-	// bottom boundary
-	if paddle.pos.y > (float32(winHeight) - (paddle.h / 2)) {
-		paddle.pos.y = (float32(winHeight) - paddle.h/2)
+	// Controller
+	if math.Abs(float64(controllerAxis)) > 1500 {
+		pct := float32(controllerAxis) / 32767.0
+		p.y += p.speed * pct * elapsedTime
 	}
 
+	// Clamp
+	if p.y < p.h/2 {
+		p.y = p.h / 2
+	}
+	if p.y > float32(winHeight)-p.h/2 {
+		p.y = float32(winHeight) - p.h/2
+	}
 }
 
-func (paddle *paddle) aiupdate(ball *ball) {
-	paddle.y = ball.y
+func (p *paddle) aiupdate(b *ball) {
+	p.y = b.y
 }
 
 func clear(pixels []byte) {
@@ -156,19 +197,22 @@ func clear(pixels []byte) {
 }
 
 func setPixel(x, y int, c color, pixels []byte) {
-	index := (y*winWidth + x) * 4
-
-	if index < len(pixels)-4 && index >= 0 {
-		pixels[index] = c.r
-		pixels[index+1] = c.g
-		pixels[index+2] = c.b
+	if x < 0 || x >= winWidth || y < 0 || y >= winHeight {
+		return
 	}
+	index := (y*winWidth + x) * 4
+	pixels[index] = c.r
+	pixels[index+1] = c.g
+	pixels[index+2] = c.b
+}
 
+func getCenter() pos {
+	return pos{float32(winWidth) / 2, float32(winHeight) / 2}
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 
-	// Added after EP06 to address macosx issues
 	err := sdl.Init(sdl.INIT_EVERYTHING)
 	if err != nil {
 		fmt.Println(err)
@@ -176,74 +220,63 @@ func main() {
 	}
 	defer sdl.Quit()
 
-	window, err := sdl.CreateWindow("Testing SDL2", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
-		int32(winWidth), int32(winHeight), sdl.WINDOW_SHOWN)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	window, _ := sdl.CreateWindow("Pong", 0, 0, int32(winWidth), int32(winHeight), sdl.WINDOW_SHOWN)
 	defer window.Destroy()
 
-	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	renderer, _ := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	defer renderer.Destroy()
 
-	tex, err := renderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(winWidth), int32(winHeight))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	tex, _ := renderer.CreateTexture(
+		sdl.PIXELFORMAT_ABGR8888,
+		sdl.TEXTUREACCESS_STREAMING,
+		int32(winWidth), int32(winHeight),
+	)
 	defer tex.Destroy()
 
 	pixels := make([]byte, winWidth*winHeight*4)
 
-	// /* for y := winHeight; y < winHeight; y++ {
-	// 	for x := winWidth; x < winWidth; x++ {
-	// 		setPixel(x, y, color{byte(x % 255), byte(y % 255), 0}, pixels)
-	// 	}
-	// } */
-
-	/* bg := color{255, 255, 255}
-	for y := 0; y < winHeight; y++ {
-		for x := 0; x < winWidth; x++ {
-			setPixel(x+10, y+30, bg, pixels)
-		}
-	} */
-	clear(pixels)
-	player1 := paddle{pos{50, 100}, 20, 100, color{255, 255, 255}}
-	player2 := paddle{pos{float32(winWidth) - 50, 100}, 20, 100, color{255, 255, 255}}
-	ball := ball{pos{300, 300}, 20, 5, 10, color{255, 255, 255}}
+	player1 := paddle{pos{50, 300}, 20, 100, 0, 400, color{255, 255, 255}}
+	player2 := paddle{pos{750, 300}, 20, 100, 0, 400, color{255, 255, 255}}
+	b := ball{pos{400, 300}, 10, 5, 3, color{255, 255, 255}}
 
 	keyState := sdl.GetKeyboardState()
-	rand.Seed(int64(sdl.GetTicks()))
-	// Changd after EP 06 to address MacOSX
-	// OSX requires that you consume events for windows to open and work properly
+	var controllerAxis int16
+
+	var lastTime = time.Now()
+
 	for {
+		// delta time
+		now := time.Now()
+		elapsedTime := float32(now.Sub(lastTime).Seconds())
+		lastTime = now
+
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch event.(type) {
 			case *sdl.QuitEvent:
 				return
 			}
-
 		}
-		clear(pixels)
-		player1.draw(pixels)
 
-		player1.update(keyState)
+		clear(pixels)
+
+		if state == play {
+			player1.update(keyState, controllerAxis, elapsedTime)
+			player2.aiupdate(&b)
+			b.update(&player1, &player2)
+		} else {
+			if keyState[sdl.SCANCODE_SPACE] != 0 {
+				state = play
+			}
+		}
+
+		player1.draw(pixels)
 		player2.draw(pixels)
-		player2.aiupdate(&ball)
-		ball.draw(pixels)
-		ball.update(&player1, &player2)
+		b.draw(pixels)
+
 		tex.Update(nil, unsafe.Pointer(&pixels[0]), winWidth*4)
 		renderer.Copy(tex, nil, nil)
 		renderer.Present()
 
 		sdl.Delay(16)
 	}
-
-	// clear(pixels)
-
 }
