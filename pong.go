@@ -110,8 +110,8 @@ func rescaleandDraw(noise []float32, min, max float32, gradient []color, w, h in
 	offset := min * scale
 
 	for i := range noise {
-		noise[i] = noise[i]*scale - offset
-		c := gradient[clamp(0, 255, int(noise[i]))]
+		value := noise[i]*scale - offset
+		c := gradient[clamp(0, 255, int(value))]
 		p := i * 4
 		result[p] = c.r
 		result[p+1] = c.g
@@ -258,6 +258,7 @@ func setPixel(x, y int, c color, pixels []byte) {
 	pixels[index] = c.r
 	pixels[index+1] = c.g
 	pixels[index+2] = c.b
+	pixels[index+3] = 255
 }
 
 func getCenter() pos {
@@ -302,6 +303,7 @@ func main() {
 	keyState := sdl.GetKeyboardState()
 	var controllerAxis int16
 	noise, min, max := noise.MakeNoise(noise.FBM, .001, 0.5, 2, 3, float32(winWidth), float32(winHeight))
+	fmt.Println(noise, min, max)
 	gradient := getGradient(color{255, 255, 0}, color{255, 0, 0})
 	noisePixels := rescaleandDraw(noise, min, max, gradient, winWidth, winHeight)
 
@@ -345,6 +347,7 @@ func main() {
 
 		for i := range noisePixels {
 			pixels[i] = noisePixels[i]
+
 		}
 
 		player1.draw(pixels)

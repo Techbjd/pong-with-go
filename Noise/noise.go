@@ -55,10 +55,10 @@ func Fbm2(x, y, frequency, lacunarity, gain float32, octaves int) float32 {
 
 }
 
-func MakeNoise(noiseType NoiseType, frequency, gain, lac float32, octaves int, w float32, h float32) (noise []float32,min,max float32) {
-	// noise := make([]float32,float32( w*h))
-	/* min := float32(9999.0)
-	max := float32(-9999.0) */
+func MakeNoise(noiseType NoiseType, frequency, gain, lac float32, octaves int, w float32, h float32) (noise []float32, min, max float32) {
+	noise = make([]float32, int(w)*int(h))
+	min = float32(9999.0)
+	max = float32(-9999.0)
 	var mutex = &sync.Mutex{}
 	numRoutines := runtime.NumCPU()
 	batchSize := len(noise) / numRoutines
@@ -70,18 +70,21 @@ func MakeNoise(noiseType NoiseType, frequency, gain, lac float32, octaves int, w
 		go func(i int) {
 			defer wg.Done()
 			start := i * batchSize
-			end := start + batchSize - 1
+			end := start + batchSize
+			if i == numRoutines-1 {
+				end = len(noise)
+			}
 
 			for j := start; j < end; j++ {
 				x := j % int(w)
-				y := (j - x) /int(h)
+				y := (j - x) / int(h)
 				if noiseType == TURBULANCE {
-					noise[i] = (Turbulence(float32(x), float32(y), frequency, lac, gain, octaves))
+					noise[j] = (Turbulence(float32(x), float32(y), frequency, lac, gain, octaves))
 				} else if noiseType == FBM {
-					noise[i] = (Fbm2(float32(x), float32(y), frequency, lac, gain, octaves))
+					noise[j] = (Fbm2(float32(x), float32(y), frequency, lac, gain, octaves))
 				}
 				mutex.Lock()
-				if noise[i] < min {
+				if noise[j] < min {
 					min = noise[j]
 				} else if noise[j] > max {
 					max = noise[j]
@@ -92,7 +95,7 @@ func MakeNoise(noiseType NoiseType, frequency, gain, lac float32, octaves int, w
 		}(i)
 	}
 	wg.Wait()
-	return noise,min,max
+	return noise, min, max
 }
 
 func setPixel(x, y int, c color, pixels []byte) {
@@ -165,7 +168,7 @@ func main() {
 	// gain = float32(clampFloat(0.01, 1.0, gain))
 	octaves := 3
 
-	MakeNoise(FBM,frequency, gain, lac, octaves, float32(winHeight), float32(winWidth))
+	MakeNoise(FBM, frequency, gain, lac, octaves, float32(winHeight), float32(winWidth))
 	// Changd after EP 06 to address MacOSX
 	// OSX requires that you consume events for windows to open and work properly
 	for {
@@ -196,7 +199,7 @@ func main() {
 						lac += 0.1 * float32(mult)
 					}
 
-					MakeNoise(FBM,frequency, gain, lac, octaves, float32(winWidth), float32(winHeight))
+					MakeNoise(FBM, frequency, gain, lac, octaves, float32(winWidth), float32(winHeight))
 				}
 			}
 
